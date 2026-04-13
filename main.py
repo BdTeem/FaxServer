@@ -4,9 +4,10 @@ from telethon import TelegramClient
 import uvicorn
 
 # --- এখান থেকে নিরাপদ পদ্ধতি শুরু ---
-API_ID = int(os.environ.get("31502774"))
-API_HASH = os.environ.get("ca90fda227151ad82b381414e8314e60")
-BOT_TOKEN = os.environ.get("8759167857:AAET32BZuZXQHVt79jFzCniujqokIm3gVYc")
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
 # --- শেষ ---
 
 app = FastAPI()
@@ -34,5 +35,7 @@ async def stream_video(channel: str, msg_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
