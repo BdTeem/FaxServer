@@ -60,7 +60,7 @@ async def get_mixdrop_link(file_id: str = Query(..., description="Mixdrop File I
         raise HTTPException(status_code=500, detail="Server API configurations missing")
 
     # এন্ডপয়েন্ট হিসেবে 'info' ব্যবহার করা হচ্ছে যা ডাইরেক্ট লিঙ্ক দেয়
-    api_url = f"https://api.mixdrop.ag/info?email={MIXDROP_EMAIL}&key={MIXDROP_KEY}&file_id={file_id}"
+    api_url = f"https://api.mixdrop.top/info?email={MIXDROP_EMAIL}&key={MIXDROP_KEY}&file_id={file_id}"
     
     async with httpx.AsyncClient() as client:
         try:
