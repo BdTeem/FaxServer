@@ -48,8 +48,9 @@ import os
 import httpx
 from fastapi import FastAPI, Query, HTTPException
 
-app = FastAPI() # এই লাইনটি কোডে থাকতে হবে
+app = FastAPI()
 
+# এনভায়রনমেন্ট ভেরিয়েবল
 MIXDROP_EMAIL = os.environ.get("MIXDROP_EMAIL")
 MIXDROP_KEY = os.environ.get("MIXDROP_KEY")
 
@@ -58,31 +59,41 @@ async def get_mixdrop_link(file_id: str = Query(..., description="Mixdrop File I
     if not MIXDROP_EMAIL or not MIXDROP_KEY:
         raise HTTPException(status_code=500, detail="Server API configurations missing")
 
-    # ✅ 'fileinfo' এর বদলে 'info' ব্যবহার করুন এবং '&file=' এর বদলে '&file_id=' দিন
+    # এন্ডপয়েন্ট হিসেবে 'info' ব্যবহার করা হচ্ছে যা ডাইরেক্ট লিঙ্ক দেয়
     api_url = f"https://api.mixdrop.ag/info?email={MIXDROP_EMAIL}&key={MIXDROP_KEY}&file_id={file_id}"
     
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(api_url)
-            data = response.json()
             
-            # মিক্সড্রপ এপিআই সফল হলে এটি 'success' হিসেবে থাকে
+            # সার্ভার রেসপন্স কোড চেক
+            if response.status_code != 200:
+                 raise HTTPException(status_code=400, detail=f"Mixdrop Server error: {response.status_code}")
+
+            # JSON ফরম্যাট চেক করা
+            try:
+                data = response.json()
+            except Exception:
+                raise HTTPException(status_code=500, detail="Mixdrop returned invalid data format (Not JSON)")
+            
             if data.get("success"):
-                # মিক্সড্রপ অনেক সময় 'result' এর ভেতর 'url' দেয়, 
-                # কিছু ক্ষেত্রে এটি 'fileref' এর ভেতরেও থাকতে পারে
                 result_data = data.get("result", {})
                 
-                # আমরা সব ধরণের সম্ভাবনা চেক করছি যেন এরর না আসে
-                direct_url = result_data.get("url") or result_data.get("delivery_url")
+                # বিভিন্ন নামে লিঙ্ক থাকতে পারে তাই সব চেক করা হচ্ছে
+                direct_url = result_data.get("url") or result_data.get("delivery_url") or result_data.get("wurl")
                 
                 if direct_url:
                     if direct_url.startswith("//"):
                         direct_url = "https:" + direct_url
                     return {"direct_link": direct_url}
                 else:
-                    raise HTTPException(status_code=404, detail="Direct link not found in response")
+                    raise HTTPException(status_code=404, detail="Direct link not found in Mixdrop response")
             else:
-                # যদি মিক্সড্রপ রিফিউজ করে, তবে আসল কারণটি দেখতে পাবেন
-                raise HTTPException(status_code=400, detail=f"Mixdrop Error: {data.get('msg', 'Unknown Error')}")
+                # মিক্সড্রপ থেকে আসা আসল এরর মেসেজটি দেখানো
+                error_msg = data.get("msg") or "Unknown Mixdrop API Error"
+                raise HTTPException(status_code=400, detail=f"Mixdrop API says: {error_msg}")
+                
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"Could not connect to Mixdrop: {str(e)}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
