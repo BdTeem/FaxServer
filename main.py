@@ -44,38 +44,45 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
 
-import os # এটি অবশ্যই থাকতে হবে
+import os
 import httpx
 from fastapi import FastAPI, Query, HTTPException
 
-# ✅ এটি হলো সবচেয়ে সিকিউর পদ্ধতি
+app = FastAPI() # এই লাইনটি কোডে থাকতে হবে
+
 MIXDROP_EMAIL = os.environ.get("MIXDROP_EMAIL")
 MIXDROP_KEY = os.environ.get("MIXDROP_KEY")
 
 @app.get("/get_mixdrop_link")
 async def get_mixdrop_link(file_id: str = Query(..., description="Mixdrop File ID")):
-    # যদি সার্ভারে ইমেইল বা কি সেট না থাকে তবে এরর দিবে
     if not MIXDROP_EMAIL or not MIXDROP_KEY:
         raise HTTPException(status_code=500, detail="Server API configurations missing")
 
-    api_url = f"https://api.mixdrop.ag/fileinfo?email={MIXDROP_EMAIL}&key={MIXDROP_KEY}&file={file_id}"
+    # ✅ 'fileinfo' এর বদলে 'info' ব্যবহার করুন এবং '&file=' এর বদলে '&file_id=' দিন
+    api_url = f"https://api.mixdrop.ag/info?email={MIXDROP_EMAIL}&key={MIXDROP_KEY}&file_id={file_id}"
     
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(api_url)
             data = response.json()
             
+            # মিক্সড্রপ এপিআই সফল হলে এটি 'success' হিসেবে থাকে
             if data.get("success"):
-                # মিক্সড্রপ থেকে ডাইরেক্ট লিঙ্কটি বের করা
-                direct_url = data["result"].get("url")
+                # মিক্সড্রপ অনেক সময় 'result' এর ভেতর 'url' দেয়, 
+                # কিছু ক্ষেত্রে এটি 'fileref' এর ভেতরেও থাকতে পারে
+                result_data = data.get("result", {})
+                
+                # আমরা সব ধরণের সম্ভাবনা চেক করছি যেন এরর না আসে
+                direct_url = result_data.get("url") or result_data.get("delivery_url")
+                
                 if direct_url:
-                    # লিঙ্কটি যদি // দিয়ে শুরু হয় তবে https: যোগ করা
                     if direct_url.startswith("//"):
                         direct_url = "https:" + direct_url
                     return {"direct_link": direct_url}
                 else:
-                    raise HTTPException(status_code=404, detail="Direct link not found")
+                    raise HTTPException(status_code=404, detail="Direct link not found in response")
             else:
-                raise HTTPException(status_code=400, detail="Mixdrop API error")
+                # যদি মিক্সড্রপ রিফিউজ করে, তবে আসল কারণটি দেখতে পাবেন
+                raise HTTPException(status_code=400, detail=f"Mixdrop Error: {data.get('msg', 'Unknown Error')}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
